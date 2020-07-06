@@ -4,16 +4,19 @@
     <LangVersion>8.0</LangVersion>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Description>A reliable distributed cron</Description>
+    <Authors>Tibor Djurica Potpara</Authors>
     <AssemblyName>Csissors</AssemblyName>
     <AssemblyTitle>Csissors</AssemblyTitle>
     <PackageId>Csissors</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
+    <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Cronos" Version="0.7.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.5" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.5" />
+    <PackageReference Include="System.Linq.Async" Version="4.1.1" />
   </ItemGroup>
 </Project>

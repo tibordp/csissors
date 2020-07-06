@@ -16,30 +16,32 @@ namespace Csissors.Redis
         private readonly ILogger _log;
 
         private readonly IConnectionMultiplexer _redis;
-        private readonly LuaScript _manageScript;
-        private readonly LuaScript _pollDynamicScript;
+        private readonly string _keyspace;
+        private readonly IDatabaseAsync _database;
+        private readonly string _manageScript;
+        private readonly string _pollDynamicScript;
 
-        private static LuaScript ParseLuaScript(string scriptName)
+        private static string ParseLuaScript(string scriptName)
         {
             var assembly = typeof(RedisRepository).Assembly;
             var provider = new EmbeddedFileProvider(assembly);
             using (var reader = new StreamReader(provider.GetFileInfo(scriptName).CreateReadStream()))
             {
-                string scriptText = reader.ReadToEnd();
-                Console.WriteLine(scriptText);
-                return LuaScript.Prepare(scriptText);
+                return reader.ReadToEnd();
             }
         }
 
-        public RedisRepository(ILoggerFactory loggerFactory, IConnectionMultiplexer redis)
+        public RedisRepository(ILoggerFactory loggerFactory, IConnectionMultiplexer redis, string keyspace)
         {
             _log = loggerFactory.CreateLogger<RedisRepository>();
             _redis = redis ?? throw new ArgumentNullException(nameof(redis));
+            _keyspace = keyspace;
             _manageScript = ParseLuaScript("Scripts.manage.lua");
             _pollDynamicScript = ParseLuaScript("Scripts.poll_dynamic.lua");
+            _database = _redis.GetDatabase();
         }
 
-        public Task CommitTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken)
+        public Task CommitTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
@@ -49,27 +51,27 @@ namespace Csissors.Redis
             await _redis.CloseAsync();
         }
 
-        public IAsyncEnumerable<(ICsissorsTask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken)
+        public IAsyncEnumerable<(IDynamicTask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public Task<PollResponse> PollTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken)
+        public Task<PollResponse> PollTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public Task RegisterTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken)
+        public Task RegisterTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public Task UnlockTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken)
+        public Task UnlockTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
 
-        public Task UnregistrerTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken)
+        public Task UnregistrerTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }

@@ -12,20 +12,20 @@ namespace Csissors.Redis
     {
         private readonly ILogger _log;
         private readonly ILoggerFactory _loggerFactory;
-        private readonly ConfigurationOptions _configurationOptions;
+        private readonly RedisOptions _options;
 
-        public RedisRepositoryFactory(ILoggerFactory loggerFactory, IOptions<RedisOptions> configurationOptions)
+        public RedisRepositoryFactory(ILoggerFactory loggerFactory, IOptions<RedisOptions> options)
         {
             _loggerFactory = loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
             _log = loggerFactory.CreateLogger<RedisRepositoryFactory>();
-            _configurationOptions = configurationOptions.Value.ConfigurationOptions;
+            _options = options.Value;
         }
 
         public async Task<IRepository> CreateRepositoryAsync()
         {
             _log.LogInformation("Connecting to Redis");
-            IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync(_configurationOptions);
-            RedisRepository repository = new RedisRepository(_loggerFactory, redis);
+            IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync(_options.ConfigurationOptions);
+            RedisRepository repository = new RedisRepository(_loggerFactory, redis, _options.KeyPrefix);
             try
             {
                 await Task.Yield();

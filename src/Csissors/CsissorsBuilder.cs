@@ -3,6 +3,7 @@ using Csissors.Repository;
 using Csissors.Schedule;
 using Csissors.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,10 +14,15 @@ namespace Csissors
 {
     public class CsissorsBuilder
     {
-        private readonly List<ITaskFactory> _tasks = new List<ITaskFactory>();
+        private readonly List<ITaskBuilder> _tasks = new List<ITaskBuilder>();
         public IServiceCollection Services { get; } = new ServiceCollection();
 
-        public CsissorsBuilder AddController<T>() where T : class
+        public CsissorsBuilder()
+        {
+            Services.AddOptions();
+        }
+
+        public CsissorsBuilder AddTaskContainer<T>() where T : class
         {
             var staticMethods = typeof(T).GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public);
             foreach (var methodInfo in staticMethods)
@@ -35,16 +41,17 @@ namespace Csissors
             var serviceProvider = Services.BuildServiceProvider();
             var tasks = CompileTasks(serviceProvider);
             var repositoryFactory = serviceProvider.GetRequiredService<IRepositoryFactory>();
+            var options = serviceProvider.GetRequiredService<IOptions<CsissorsOptions>>();
             var repository = await repositoryFactory.CreateRepositoryAsync();
-            return new CsissorsContext(repository, tasks);
+            return new CsissorsContext(repository, tasks, options);
         }
 
-        private IReadOnlyList<ICsissorsTask> CompileTasks(IServiceProvider serviceProvider)
+        private IReadOnlyList<ITask> CompileTasks(IServiceProvider serviceProvider)
         {
             return _tasks.Select(task => task.Build(serviceProvider)).ToArray();
         }
 
-        private static bool TryCreateTaskFactory(Type controllerType, MethodInfo methodInfo, out ITaskFactory result)
+        private static bool TryCreateTaskFactory(Type taskContainerType, MethodInfo methodInfo, out ITaskBuilder result)
         {
             result = null;
 
@@ -69,7 +76,8 @@ namespace Csissors
                     );
                 }
                 var taskName = attribute.Name ?? methodInfo.Name;
-                result = new ControllerTaskFactory(controllerType, methodInfo, schedule, taskName, attribute.FailureMode, attribute.ExecutionMode, attribute.Dynamic);
+                var taskConfiguration = new TaskConfiguration(schedule, attribute.FailureMode, attribute.ExecutionMode, attribute.Dynamic);
+                result = new TaskContainerTaskBuilder(taskContainerType, methodInfo, taskName, taskConfiguration);
                 return true;
             }
 

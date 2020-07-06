@@ -15,7 +15,7 @@ namespace Csissors.Schedule
 
         public DateTimeOffset? GetNextExecution(DateTimeOffset now, DateTimeOffset? lastExecution = null)
         {
-            if (lastExecution == null)
+            if (!lastExecution.HasValue)
             {
                 return now + Interval;
             }

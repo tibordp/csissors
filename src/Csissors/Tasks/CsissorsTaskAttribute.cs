@@ -17,4 +17,14 @@ namespace Csissors.Tasks
         public bool Dynamic { get; set; }
         public bool FastForward { get; set; }
     }
+
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public class FromTaskDataAttribute : Attribute
+    {
+        public string Name { get; }
+        public FromTaskDataAttribute(string name)
+        {
+            Name = name ?? throw new ArgumentNullException(nameof(name));
+        }
+    }
 }

@@ -2,7 +2,7 @@ using Csissors.Tasks;
 using System;
 using System.Threading.Tasks;
 
-namespace Csissors
+namespace Csissors.Middleware
 {
     public interface IMiddleware
     {

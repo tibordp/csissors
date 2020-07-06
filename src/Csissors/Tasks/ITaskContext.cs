@@ -6,6 +6,6 @@ namespace Csissors.Tasks
     {
         IAppContext AppContext { get; }
         CancellationToken Cancellation { get; }
-        ICsissorsTask Task { get; }
+        ITask Task { get; }
     }
 }

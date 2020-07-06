@@ -4,12 +4,14 @@
     <LangVersion>8.0</LangVersion>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Description>Redis backend for Csissors</Description>
+    <Authors>Tibor Djurica Potpara</Authors>
     <AssemblyName>Csissors.Redis</AssemblyName>
     <AssemblyTitle>Csissors.Redis</AssemblyTitle>
     <PackageId>Csissors.Redis</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
+    <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Csissors\Csissors.csproj" />

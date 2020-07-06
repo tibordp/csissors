@@ -1,4 +1,6 @@
-﻿using Csissors.Redis;
+﻿using Csissors.Middleware;
+using Csissors.Redis;
+using Csissors.Schedule;
 using Csissors.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -53,34 +55,43 @@ namespace Csissors.Demo
         }
     }
 
-    class Controller
+    class TaskContainer
     {
-        private readonly ILogger<Controller> _log;
+        private readonly ILogger<TaskContainer> _log;
 
-        public Controller(ILogger<Controller> log)
+        public TaskContainer(ILogger<TaskContainer> log)
         {
-            _log = log;
+            _log = log ?? throw new ArgumentNullException(nameof(log));
         }
+        /*
+                [CsissorsTask(Seconds = 2)]
+                public static async Task EveryTwoSeconds(ILogger<Program> anotherLog)
+                {
+                    anotherLog.LogInformation("MUAHAHAAHA");
+                    throw new Exception("oops");
+                }
 
-        [CsissorsTask(Seconds = 2)]
-        public static async Task EveryTwoSeconds(ITaskContext context)
-        {
-            throw new Exception("oops");
-        }
+                [CsissorsTask(Seconds = 5)]
+                public async Task EveryFiveSeconds(ITaskContext context, [FromTaskData("hello")] string hello)
+                {
+                    _log.LogInformation($"Hello, I am {context.Task.Name}");
+                }
 
-        [CsissorsTask(Schedule = "*/5 * * * *")]
-        public async Task EveryFiveMinutes(ITaskContext context)
+                [CsissorsTask(Schedule = "* * * * *")]
+                public async Task EveryMinute(ITaskContext context)
+                {
+                    _log.LogInformation($"Hello, I am {context.Task.Name}");
+                }
+        */
+        [CsissorsTask(Name = "foobar", Schedule = "* * * * *", Dynamic = true)]
+        public async Task EveryMinuteDynamic(ITaskContext context)
         {
             _log.LogInformation($"Hello, I am {context.Task.Name}");
+            if (context.Task.Name == "foobar:hello2")
+            {
+                await context.AppContext.UnscheduleTask(((IDynamicTask)context.Task).ParentTask, "foobar:hello2", CancellationToken.None);
+            }
         }
-
-
-        [CsissorsTask(Schedule = "@every_minute")]
-        public async Task EveryMinute(ITaskContext context)
-        {
-            _log.LogInformation($"Hello, I am {context.Task.Name}");
-        }
-
     }
 
     class Program
@@ -92,27 +103,44 @@ namespace Csissors.Demo
                 {
                     services.AddLogging(configure => configure.AddConsole(configure =>
                     {
-                        //configure.Format = ConsoleLoggerFormat.Systemd;
+                        configure.Format = ConsoleLoggerFormat.Systemd;
                         configure.IncludeScopes = true;
                     }));
                 })
-                .AddController<Controller>()
-                .AddMiddleware<LoggingMiddleware>(services =>
+                .AddTaskContainer<TaskContainer>()
+                .AddMiddleware(services =>
                     new LoggingMiddleware("1", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
-                .AddMiddleware<LoggingMiddleware>(services =>
-                    new LoggingMiddleware("2", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
-                .AddMiddleware<LoggingMiddleware>(services =>
-                    new LoggingMiddleware("3", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
                 .AddMiddleware<RetryMiddleware>()
-                .AddRedisRepository(options =>
+                .AddMiddleware(async (context, next) =>
+                {
+                    await next();
+                })
+                .AddInMemoryRepository()
+                /*.AddRedisRepository(options =>
                 {
                     options.ConfigurationOptions = ConfigurationOptions.Parse("localhost");
-                })
+                })*/
                 ;
 
             await using (var context = await csissors.BuildAsync())
             {
-                await context.RunAsync(CancellationToken.None);
+                var cts = new CancellationTokenSource();
+                //cts.CancelAfter(5000);
+                var task = context.GetTask("foobar");
+                await context.ScheduleTask(task, "hello1", new TaskConfiguration(
+                        new IntervalSchedule(TimeSpan.FromSeconds(2), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        false
+                ), cts.Token);
+                await context.ScheduleTask(task, "hello2", new TaskConfiguration(
+                        new IntervalSchedule(TimeSpan.FromSeconds(4), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        false
+                ), cts.Token);
+
+                await context.RunAsync(cts.Token);
             }
         }
 
