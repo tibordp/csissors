@@ -4,7 +4,8 @@ namespace Csissors.Tasks
 {
     internal interface ITaskBuilder
     {
-        ITask Build(IServiceProvider serviceProvider);
+        ITask BuildStatic(IServiceProvider serviceProvider);
+        IDynamicTask BuildDynamic(IServiceProvider serviceProvider);
     }
 
 }

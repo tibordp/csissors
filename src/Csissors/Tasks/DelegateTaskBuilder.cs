@@ -6,23 +6,16 @@ using System.Threading.Tasks;
 
 namespace Csissors.Tasks
 {
-    internal class TaskContainerTaskBuilder : ITaskBuilder
+    internal class DelegateTaskBuilder : ITaskBuilder
     {
-        private readonly Type _taskContainerType;
-        private readonly MethodInfo _methodInfo;
+        private readonly Delegate _delegate;
         private readonly string _name;
         private readonly TaskConfiguration? _configuration;
 
-        public TaskContainerTaskBuilder(Type taskContainerType, MethodInfo methodInfo, string name, TaskConfiguration? configuration = null)
+        public DelegateTaskBuilder(Delegate @delegate, string name, TaskConfiguration? configuration = null)
         {
-            if (string.IsNullOrEmpty(name))
-            {
-                throw new ArgumentException($"'{nameof(name)}' cannot be null or empty", nameof(name));
-            }
-
-            _taskContainerType = taskContainerType ?? throw new ArgumentNullException(nameof(taskContainerType));
-            _methodInfo = methodInfo ?? throw new ArgumentNullException(nameof(methodInfo));
             _configuration = configuration;
+            _delegate = @delegate;
             _name = name;
         }
 
@@ -45,11 +38,11 @@ namespace Csissors.Tasks
             var contextParameter = Expression.Parameter(typeof(ITaskContext));
             var expression = TaskBuilderUtils.ApplyMiddlewares(serviceProvider, contextParameter, Expression.Lambda<Func<Task>>(
                 Expression.Call(
-                    _methodInfo.IsStatic
+                    _delegate.Method.IsStatic
                         ? null
-                        : Expression.Constant(serviceProvider.GetRequiredService(_taskContainerType)),
-                    _methodInfo,
-                    TaskBuilderUtils.MapParameters(_methodInfo, serviceProvider, contextParameter)
+                        : Expression.Constant(_delegate.Target),
+                    _delegate.Method,
+                    TaskBuilderUtils.MapParameters(_delegate.Method, serviceProvider, contextParameter)
                 )
             ));
             var taskFuncExpression = Expression.Lambda<TaskFunc>(expression.Body, contextParameter);

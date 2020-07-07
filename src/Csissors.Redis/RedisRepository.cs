@@ -51,7 +51,7 @@ namespace Csissors.Redis
             await _redis.CloseAsync();
         }
 
-        public IAsyncEnumerable<(IDynamicTask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
+        public IAsyncEnumerable<(ITask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
@@ -61,7 +61,7 @@ namespace Csissors.Redis
             throw new NotImplementedException();
         }
 
-        public Task RegisterTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
+        public Task RegisterTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }
@@ -71,7 +71,7 @@ namespace Csissors.Redis
             throw new NotImplementedException();
         }
 
-        public Task UnregistrerTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
+        public Task UnregistrerTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
         {
             throw new NotImplementedException();
         }

@@ -9,7 +9,6 @@
     <AssemblyTitle>Csissors</AssemblyTitle>
     <PackageId>Csissors</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
     <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>

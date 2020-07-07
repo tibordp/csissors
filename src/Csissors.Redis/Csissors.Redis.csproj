@@ -9,7 +9,6 @@
     <AssemblyTitle>Csissors.Redis</AssemblyTitle>
     <PackageId>Csissors.Redis</PackageId>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
     <IncludeSymbols>true</IncludeSymbols>
   </PropertyGroup>

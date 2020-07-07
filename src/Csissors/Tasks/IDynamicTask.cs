@@ -1,7 +1,10 @@
+using System.Threading.Tasks;
+
 namespace Csissors.Tasks
 {
-    public interface IDynamicTask : ITask
+    public interface IDynamicTask
     {
-        ITask ParentTask { get; }
+        string Name { get; }
+        Task ExecuteAsync(ITaskContext context);
     }
 }

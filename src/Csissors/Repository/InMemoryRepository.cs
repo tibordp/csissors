@@ -8,63 +8,58 @@ using System.Threading.Tasks;
 
 namespace Csissors.Repository
 {
-    internal class TaskData
-    {
-        public DateTimeOffset? ExecuteAfter { get; set; }
-        public DateTimeOffset? LockedUntil { get; set; }
-        public Lease? LockedBy { get; set; }
-    }
-
-    internal class Lease : ILease
-    {
-    }
-
-    class TaskComparer : IEqualityComparer<ITask>
-    {
-        public readonly static TaskComparer Instance = new TaskComparer();
-
-        public bool Equals(ITask x, ITask y)
-        {
-            return string.Equals(x.Name, y.Name);
-        }
-
-        public int GetHashCode(ITask obj)
-        {
-            return obj.Name.GetHashCode();
-        }
-    }
-
     public class InMemoryRepository : IRepository, IRepositoryFactory
     {
+        internal class TaskComparer : IEqualityComparer<ITask>
+        {
+            public readonly static TaskComparer Instance = new TaskComparer();
+
+            public bool Equals(ITask x, ITask y)
+            {
+                return x.GetCanonicalName() == y.GetCanonicalName();
+            }
+
+            public int GetHashCode(ITask obj)
+            {
+                return obj.GetCanonicalName().GetHashCode();
+            }
+        }
+
+        internal class Lease : ILease
+        {
+        }
+
+        internal class TaskData
+        {
+            public DateTimeOffset? ExecuteAfter { get; set; }
+            public DateTimeOffset? LockedUntil { get; set; }
+            public Lease? LockedBy { get; set; }
+        }
+
         private readonly ILogger<InMemoryRepository> _log;
         private readonly object _syncRoot = new object();
         private readonly Dictionary<ITask, TaskData> _data = new Dictionary<ITask, TaskData>();
-        private readonly Dictionary<ITask, HashSet<IDynamicTask>> _dynamicTasks = new Dictionary<ITask, HashSet<IDynamicTask>>();
+        private readonly Dictionary<IDynamicTask, HashSet<ITask>> _dynamicTasks = new Dictionary<IDynamicTask, HashSet<ITask>>();
 
         public InMemoryRepository(ILogger<InMemoryRepository> log)
         {
             _log = log ?? throw new ArgumentNullException(nameof(log));
         }
 
-        public IAsyncEnumerable<(IDynamicTask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
+        public IAsyncEnumerable<(ITask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
         {
-            (IDynamicTask, ILease)[] result;
-
+            var result = Array.Empty<(ITask, ILease)>();
             lock (_syncRoot)
             {
                 if (_dynamicTasks.TryGetValue(task, out var taskInstances))
                 {
                     result = taskInstances.Select(task => (task, (ILease)new Lease())).ToArray();
                 }
-                else
-                {
-                    result = Array.Empty<(IDynamicTask, ILease)>();
-                }
             }
             return result.ToAsyncEnumerable();
         }
 
-        public Task<PollResponse> PollTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
+        public Task<PollResponse> PollTaskAsync(DateTimeOffset now, ITask task, ILease? lease, CancellationToken cancellationToken)
         {
             lock (_syncRoot)
             {
@@ -79,10 +74,14 @@ namespace Csissors.Repository
                     _data.Add(task, taskData);
                 }
 
-                var scheduledAt = taskData.ExecuteAfter.Value;
-                ResultType result;
+                var scheduledAt = taskData.ExecuteAfter;
 
-                if (taskData.LockedUntil.HasValue && taskData.LockedUntil.Value > now && (lease != taskData.LockedBy))
+                ResultType result;
+                if (!taskData.ExecuteAfter.HasValue)
+                {
+                    result = ResultType.Missing;
+                }
+                else if (taskData.LockedUntil.HasValue && taskData.LockedUntil.Value > now && (lease != taskData.LockedBy))
                 {
                     result = ResultType.Locked;
                 }
@@ -109,20 +108,6 @@ namespace Csissors.Repository
                     Lease = taskData.LockedBy,
                     ScheduledAt = scheduledAt,
                 });
-            }
-        }
-
-        public Task RegisterTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
-        {
-            lock (_syncRoot)
-            {
-                if (!_dynamicTasks.TryGetValue(task.ParentTask, out var taskInstances))
-                {
-                    taskInstances = new HashSet<IDynamicTask>(TaskComparer.Instance);
-                    _dynamicTasks.Add(task.ParentTask, taskInstances);
-                }
-                taskInstances.Add(task);
-                return Task.CompletedTask;
             }
         }
 
@@ -155,31 +140,47 @@ namespace Csissors.Repository
             }
         }
 
-        public Task UnregistrerTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
+        public Task RegisterTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
         {
-            lock (_syncRoot)
+            if (task.ParentTask != null)
             {
-                if (_dynamicTasks.TryGetValue(task.ParentTask, out var taskInstances))
+                lock (_syncRoot)
                 {
-                    taskInstances.Remove(task);
-                    if (!taskInstances.Any())
+                    if (!_dynamicTasks.TryGetValue(task.ParentTask, out var taskInstances))
                     {
-                        _dynamicTasks.Remove(task.ParentTask);
+                        taskInstances = new HashSet<ITask>(TaskComparer.Instance);
+                        _dynamicTasks.Add(task.ParentTask, taskInstances);
                     }
+                    taskInstances.Add(task);
                 }
-                return Task.CompletedTask;
             }
+            return Task.CompletedTask;
         }
 
-        public ValueTask DisposeAsync()
+        public Task UnregistrerTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
         {
-            return default;
+            if (task.ParentTask != null)
+            {
+                lock (_syncRoot)
+                {
+                    if (_dynamicTasks.TryGetValue(task.ParentTask, out var taskInstances))
+                    {
+                        taskInstances.Remove(task);
+                        if (!taskInstances.Any())
+                        {
+                            _dynamicTasks.Remove(task.ParentTask);
+                        }
+                    }
+                }
+            }
+            return Task.CompletedTask;
         }
 
         public Task<IRepository> CreateRepositoryAsync()
         {
             return Task.FromResult<IRepository>(this);
         }
+        public ValueTask DisposeAsync() => default;
     }
 
 }

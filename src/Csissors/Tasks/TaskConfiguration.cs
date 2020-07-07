@@ -10,15 +10,14 @@ namespace Csissors.Tasks
         public FailureMode FailureMode { get; }
         public ExecutionMode ExecutionMode { get; }
         public TimeSpan LeaseDuration { get; }
-        public bool Dynamic { get; }
         public IReadOnlyDictionary<string, object?> Data { get; }
-        public TaskConfiguration(ISchedule schedule, FailureMode failureMode, ExecutionMode executionMode, bool dynamic, TimeSpan? leaseDuration = null, IReadOnlyDictionary<string, object?> data = null)
+        public TaskConfiguration(ISchedule schedule, FailureMode failureMode, ExecutionMode executionMode, TimeSpan leaseDuration, IReadOnlyDictionary<string, object?> data)
         {
             Schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
+            Data = data ?? throw new ArgumentNullException(nameof(data));
             FailureMode = failureMode;
             ExecutionMode = executionMode;
-            Dynamic = dynamic;
-            LeaseDuration = leaseDuration ?? TimeSpan.FromSeconds(60);
+            LeaseDuration = leaseDuration;
         }
     }
 }
