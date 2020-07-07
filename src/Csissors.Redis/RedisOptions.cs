@@ -10,6 +10,8 @@ namespace Csissors.Redis
         /// </summary>
         public ConfigurationOptions ConfigurationOptions { get; set; }
 
+        public string KeyPrefix { get; set; } = "";
+
         RedisOptions IOptions<RedisOptions>.Value => this;
     }
 }

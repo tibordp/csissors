@@ -8,12 +8,11 @@ namespace Csissors.Repository
 {
     public interface IRepository : IAsyncDisposable
     {
-        IAsyncEnumerable<(ICsissorsTask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken);
-        Task RegisterTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken);
-        Task UnregistrerTaskAsync(DateTimeOffset now, ICsissorsTask task, CancellationToken cancellationToken);
-        Task CommitTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken);
-        Task UnlockTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken);
-        Task<PollResponse> PollTask(DateTimeOffset now, ICsissorsTask task, ILease lease, CancellationToken cancellationToken);
+        IAsyncEnumerable<(ITask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken);
+        Task RegisterTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken);
+        Task UnregistrerTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken);
+        Task CommitTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken);
+        Task UnlockTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken);
+        Task<PollResponse> PollTaskAsync(DateTimeOffset now, ITask task, ILease? lease, CancellationToken cancellationToken);
     }
-
 }

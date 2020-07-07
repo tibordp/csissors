@@ -1,10 +1,14 @@
-﻿using Csissors.Redis;
+﻿using Csissors.Attributes;
+using Csissors.Middleware;
+using Csissors.Redis;
+using Csissors.Schedule;
 using Csissors.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
 using StackExchange.Redis;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -53,66 +57,114 @@ namespace Csissors.Demo
         }
     }
 
-    class Controller
+    class TaskContainer
     {
-        private readonly ILogger<Controller> _log;
+        private readonly ILogger<TaskContainer> _log;
 
-        public Controller(ILogger<Controller> log)
+        public TaskContainer(ILogger<TaskContainer> log)
         {
-            _log = log;
+            _log = log ?? throw new ArgumentNullException(nameof(log));
+        }
+
+        [CsissorsTask(Seconds = 3)]
+        public static async Task LongRunningTask(ITaskContext taskContext)
+        {
+            await Task.Delay(10000);
         }
 
         [CsissorsTask(Seconds = 2)]
-        public static async Task EveryTwoSeconds(ITaskContext context)
+        public static async Task EveryTwoSeconds(ILogger<Program> anotherLog)
         {
+            anotherLog.LogInformation("MUAHAHAAHA");
             throw new Exception("oops");
         }
+        /*
+                [CsissorsTask(Seconds = 5)]
+                public async Task EveryFiveSeconds(ITaskContext context, [FromTaskData("hello")] string hello)
+                {
+                    _log.LogInformation($"Hello, I am {context.Task.Name}");
+                }
 
-        [CsissorsTask(Schedule = "*/5 * * * *")]
-        public async Task EveryFiveMinutes(ITaskContext context)
+                [CsissorsTask(Schedule = "* * * * *")]
+                public async Task EveryMinute(ITaskContext context)
+                {
+                    _log.LogInformation($"Hello, I am {context.Task.Name}");
+                }
+        */
+
+        [CsissorsDynamicTask]
+        public async Task EveryMinuteDynamic(ITaskContext context, [FromTaskData] string username)
         {
-            _log.LogInformation($"Hello, I am {context.Task.Name}");
+            _log.LogInformation($"Hello, I am {username}");
+            if (username == "liza")
+            {
+                await context.AppContext.UnscheduleTask(context.Task.ParentTask, context.Task.Name, CancellationToken.None);
+            }
         }
-
-
-        [CsissorsTask(Schedule = "@every_minute")]
-        public async Task EveryMinute(ITaskContext context)
-        {
-            _log.LogInformation($"Hello, I am {context.Task.Name}");
-        }
-
     }
 
     class Program
     {
         static async Task MainAsync()
         {
+            var conf = new TaskConfiguration(
+                        new IntervalSchedule(TimeSpan.FromSeconds(1), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        TimeSpan.FromMinutes(1),
+                        new Dictionary<string, object?> { { "username", "tibor" } }
+                );
+
             var csissors = new CsissorsBuilder()
                 .ConfigureServices(services =>
                 {
                     services.AddLogging(configure => configure.AddConsole(configure =>
                     {
-                        //configure.Format = ConsoleLoggerFormat.Systemd;
+                        configure.Format = ConsoleLoggerFormat.Default;
                         configure.IncludeScopes = true;
                     }));
                 })
-                .AddController<Controller>()
-                .AddMiddleware<LoggingMiddleware>(services =>
-                    new LoggingMiddleware("1", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
-                .AddMiddleware<LoggingMiddleware>(services =>
-                    new LoggingMiddleware("2", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
-                .AddMiddleware<LoggingMiddleware>(services =>
-                    new LoggingMiddleware("3", services.GetRequiredService<ILogger<LoggingMiddleware>>()))
-                .AddMiddleware<RetryMiddleware>()
-                .AddRedisRepository(options =>
+                //.AddTaskContainer<TaskContainer>()
+                .AddDynamicTask("yupee", async (ITaskContext context, ILoggerFactory logger) =>
+                {
+                    logger.CreateLogger("yuhuhu").LogInformation("Hello", context.Task.Configuration.Data);
+                    await Task.Yield();
+                })
+                .AddTask("whipee", conf, async (ITaskContext context, ILoggerFactory logger) =>
+                {
+                    logger.CreateLogger("yuhuhu").LogInformation("Hello1", context.Task.Configuration.Data);
+                    await Task.Yield();
+                })
+                //.AddMiddleware<RetryMiddleware>()
+                .AddInMemoryRepository()
+                /*.AddRedisRepository(options =>
                 {
                     options.ConfigurationOptions = ConfigurationOptions.Parse("localhost");
-                })
+                })*/
                 ;
 
             await using (var context = await csissors.BuildAsync())
             {
-                await context.RunAsync(CancellationToken.None);
+                var cts = new CancellationTokenSource();
+                cts.CancelAfter(5000);
+                var task = context.Tasks.DynamicTasks[0];
+
+                await context.ScheduleTask(task, "hello1", new TaskConfiguration(
+                        new IntervalSchedule(TimeSpan.FromSeconds(2), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        TimeSpan.FromMinutes(1),
+                        new Dictionary<string, object?> { { "username", "tibor" } }
+                ), cts.Token);
+                await context.ScheduleTask(task, "hello2", new TaskConfiguration(
+                        new IntervalSchedule(TimeSpan.FromSeconds(4), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        TimeSpan.FromMinutes(1),
+                        new Dictionary<string, object?> { { "username", "liza" } }
+                ), cts.Token);
+
+                await context.RunAsync(cts.Token);
             }
         }
 

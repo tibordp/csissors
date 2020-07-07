@@ -4,8 +4,8 @@ namespace Csissors.Repository
 {
     public class PollResponse
     {
-        ResultType Result { get; }
-        DateTimeOffset ScheduledAt { get; }
-        ILease Lease { get; }
+        public ResultType Result { get; set; }
+        public DateTimeOffset? ScheduledAt { get; set; }
+        public ILease? Lease { get; set; }
     }
 }

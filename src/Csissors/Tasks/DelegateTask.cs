@@ -5,30 +5,22 @@ using System.Threading.Tasks;
 namespace Csissors.Tasks
 {
     public delegate Task TaskFunc(ITaskContext context);
-    internal class DelegateTask : ICsissorsTask
+
+    internal class DelegateTask : ITask, IDynamicTask
     {
         private readonly TaskFunc _delegate;
+        private readonly TaskConfiguration? _configuration;
 
-        public DelegateTask(TaskFunc @delegate, ISchedule schedule, string name, FailureMode failureMode, ExecutionMode executionMode, bool dynamic)
+        public DelegateTask(TaskFunc @delegate, string name, TaskConfiguration? configuration)
         {
             _delegate = @delegate ?? throw new ArgumentNullException(nameof(@delegate));
-            Schedule = schedule ?? throw new ArgumentNullException(nameof(schedule));
             Name = name ?? throw new ArgumentNullException(nameof(name));
-            FailureMode = failureMode;
-            ExecutionMode = executionMode;
-            Dynamic = dynamic;
+            _configuration = configuration;
         }
 
         public string Name { get; }
-        public ISchedule Schedule { get; }
-
-        public FailureMode FailureMode { get; }
-
-        public ExecutionMode ExecutionMode { get; }
-
-        public bool Dynamic { get; }
-
+        public TaskConfiguration Configuration => _configuration ?? throw new Exception("This is a dynamic task.");
+        public IDynamicTask? ParentTask => null;
         public Task ExecuteAsync(ITaskContext context) => _delegate(context);
     }
-
 }

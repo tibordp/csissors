@@ -15,10 +15,9 @@ namespace Csissors.Schedule
         public CronExpression CronExpression { get; }
         public TimeZoneInfo TimeZoneInfo { get; }
         public bool FastForward { get; }
-
         public DateTimeOffset? GetNextExecution(DateTimeOffset now, DateTimeOffset? lastExecution = null)
         {
-            if (lastExecution == null)
+            if (!lastExecution.HasValue)
             {
                 return CronExpression.GetNextOccurrence(now, TimeZoneInfo);
             }
@@ -27,7 +26,7 @@ namespace Csissors.Schedule
             do
             {
                 nextExecution = CronExpression.GetNextOccurrence(nextExecution.Value, TimeZoneInfo);
-            } while (nextExecution.HasValue || !FastForward || nextExecution >= now);
+            } while (nextExecution.HasValue && !(FastForward || nextExecution >= now));
             return nextExecution;
         }
     }
