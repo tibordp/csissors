@@ -1,7 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using System;
+﻿using System;
 using System.Linq.Expressions;
-using System.Reflection;
 using System.Threading.Tasks;
 
 namespace Csissors.Tasks
@@ -14,9 +12,9 @@ namespace Csissors.Tasks
 
         public DelegateTaskBuilder(Delegate @delegate, string name, TaskConfiguration? configuration = null)
         {
-            _configuration = configuration;
             _delegate = @delegate;
             _name = name;
+            _configuration = configuration;
         }
 
         public ITask BuildStatic(IServiceProvider serviceProvider)
@@ -42,7 +40,7 @@ namespace Csissors.Tasks
                         ? null
                         : Expression.Constant(_delegate.Target),
                     _delegate.Method,
-                    TaskBuilderUtils.MapParameters(_delegate.Method, serviceProvider, contextParameter)
+                    TaskBuilderUtils.MapParameters(serviceProvider, contextParameter, _delegate.Method)
                 )
             ));
             var taskFuncExpression = Expression.Lambda<TaskFunc>(expression.Body, contextParameter);

@@ -1,6 +1,6 @@
 ﻿using Csissors.Attributes;
 using Csissors.Middleware;
-using Csissors.Redis;
+using Csissors.Postgres;
 using Csissors.Schedule;
 using Csissors.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -57,6 +57,7 @@ namespace Csissors.Demo
         }
     }
 
+    [CsissorsTaskContainer]
     class TaskContainer
     {
         private readonly ILogger<TaskContainer> _log;
@@ -93,9 +94,9 @@ namespace Csissors.Demo
         */
 
         [CsissorsDynamicTask]
-        public async Task EveryMinuteDynamic(ITaskContext context, [FromTaskData] string username)
+        public async Task EveryMinuteDynamic(ITaskContext context, [FromTaskData] string username, [FromTaskData(Optional = true)] string nonExistent)
         {
-            _log.LogInformation($"Hello, I am {username}");
+            _log.LogInformation($"Hello, I am {username}, {nonExistent}");
             if (username == "liza")
             {
                 await context.AppContext.UnscheduleTask(context.Task.ParentTask, context.Task.Name, CancellationToken.None);
@@ -125,6 +126,7 @@ namespace Csissors.Demo
                     }));
                 })
                 //.AddTaskContainer<TaskContainer>()
+                .AddAssembly()
                 .AddDynamicTask("yupee", async (ITaskContext context, ILoggerFactory logger) =>
                 {
                     logger.CreateLogger("yuhuhu").LogInformation("Hello", context.Task.Configuration.Data);
@@ -136,7 +138,10 @@ namespace Csissors.Demo
                     await Task.Yield();
                 })
                 //.AddMiddleware<RetryMiddleware>()
-                .AddInMemoryRepository()
+                .AddPostgresRepository(options =>
+                {
+                    options.ConnectionString = "Host=localhost;Username=postgres;Password=postgres;Database=postgres";
+                })
                 /*.AddRedisRepository(options =>
                 {
                     options.ConfigurationOptions = ConfigurationOptions.Parse("localhost");
@@ -161,7 +166,7 @@ namespace Csissors.Demo
                         FailureMode.None,
                         ExecutionMode.AtLeastOnce,
                         TimeSpan.FromMinutes(1),
-                        new Dictionary<string, object?> { { "username", "liza" } }
+                        new Dictionary<string, object?> { { "username", "liza" }, { "nonExistent", "liza" } }
                 ), cts.Token);
 
                 await context.RunAsync(cts.Token);

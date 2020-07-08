@@ -30,7 +30,7 @@ namespace Csissors.Tasks
             return expression;
         }
 
-        public static IEnumerable<Expression> MapParameters(MethodInfo methodInfo, IServiceProvider serviceProvider, ParameterExpression contextParameter)
+        public static IEnumerable<Expression> MapParameters(IServiceProvider serviceProvider, ParameterExpression contextParameter, MethodInfo methodInfo)
         {
             var attributeMappers = serviceProvider.GetServices<IParameterMapper>();
 
