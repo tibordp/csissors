@@ -1,41 +1,19 @@
-using Cronos;
 using Csissors.Attributes;
 using Csissors.Executor;
 using Csissors.Parameters;
 using Csissors.Repository;
-using Csissors.Schedule;
+using Csissors.Serialization;
 using Csissors.Tasks;
+using Csissors.Utilities;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace Csissors
 {
-    public class TaskSet
-    {
-        public IReadOnlyList<ITask> StaticTasks { get; }
-        public IReadOnlyList<IDynamicTask> DynamicTasks { get; }
-
-        public TaskSet(IReadOnlyList<ITask> staticTasks, IReadOnlyList<IDynamicTask> dynamicTasks)
-        {
-            StaticTasks = staticTasks ?? throw new ArgumentNullException(nameof(staticTasks));
-            DynamicTasks = dynamicTasks ?? throw new ArgumentNullException(nameof(dynamicTasks));
-        }
-
-        internal static TaskSet BuildTasks(IServiceProvider serviceProvider, IEnumerable<ITaskBuilder> staticTaskBuilders, IEnumerable<ITaskBuilder> dynamicTaskBuilders)
-        {
-            var tasks = staticTaskBuilders.Select(taskBuilder => taskBuilder.BuildStatic(serviceProvider)).ToArray();
-            var dynamicTasks = dynamicTaskBuilders.Select(taskBuilder => taskBuilder.BuildDynamic(serviceProvider)).ToArray();
-
-            return new TaskSet(tasks, dynamicTasks);
-        }
-    }
 
     public class CsissorsBuilder
     {
@@ -54,18 +32,36 @@ namespace Csissors
                     .AddSingleton<IParameterMapper, ContextAttributeMapper>()
                     .AddSingleton<IParameterMapper, CancellationTokenAttributeMapper>()
                     .AddSingleton<IParameterMapper, ServiceAttributeMapper>()
-                    .AddSingleton<IParameterMapper, TaskDataParameterMapper>();
+                    .AddSingleton<IParameterMapper, TaskDataParameterMapper>()
+                    .AddSingleton<ITaskInstanceFactory, DefaultTaskInstanceFactory>()
+                    .AddSingleton<IClock, Clock>();
             }
         }
 
-        public CsissorsBuilder AddTaskContainer<T>() where T : class
+        public CsissorsBuilder AddTaskContainer(Type type)
         {
-            var staticMethods = typeof(T).GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public);
+            var staticMethods = type.GetMethods(BindingFlags.Static | BindingFlags.Instance | BindingFlags.Public);
             foreach (var methodInfo in staticMethods)
             {
-                RegisterTaskMethod(typeof(T), methodInfo);
+                RegisterTaskMethod(type, methodInfo);
             }
-            Services.AddSingleton<T>();
+            Services.AddSingleton(type);
+            return this;
+        }
+
+        public CsissorsBuilder AddTaskContainer<T>() where T : class => AddTaskContainer(typeof(T));
+
+        public CsissorsBuilder AddAssembly() => AddAssembly(Assembly.GetCallingAssembly());
+
+        public CsissorsBuilder AddAssembly(Assembly assembly)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                if (type.GetCustomAttribute<CsissorsTaskContainerAttribute>() != null)
+                {
+                    AddTaskContainer(type);
+                }
+            }
             return this;
         }
 
@@ -81,16 +77,14 @@ namespace Csissors
             return this;
         }
 
-        public async Task<IAppContext> BuildAsync()
+        public async Task<IAppContext> BuildAsync(CancellationToken cancellationToken)
         {
             var serviceProvider = Services.BuildServiceProvider();
             var taskSet = TaskSet.BuildTasks(serviceProvider, _staticTaskBuilders, _dynamicTaskBuilders);
             var repositoryFactory = serviceProvider.GetRequiredService<IRepositoryFactory>();
-            var options = serviceProvider.GetRequiredService<IOptions<CsissorsOptions>>();
-            var executor = serviceProvider.GetRequiredService<IExecutor>();
-            var logger = serviceProvider.GetRequiredService<ILogger<CsissorsContext>>();
-            var repository = await repositoryFactory.CreateRepositoryAsync();
-            return new CsissorsContext(logger, executor, repository, taskSet, options);
+            var repository = await repositoryFactory.CreateRepositoryAsync(cancellationToken);
+
+            return ActivatorUtilities.CreateInstance<CsissorsContext>(serviceProvider, taskSet, repository);
         }
 
         private void RegisterTaskMethod(Type taskContainerType, MethodInfo methodInfo)
@@ -99,48 +93,15 @@ namespace Csissors
             {
                 switch (attribute)
                 {
-                    case CsissorsTaskAttribute taskAttribute:
-                        {
-                            ISchedule schedule;
-                            if (taskAttribute.Schedule != null)
-                            {
-                                CronExpression cronExpression = CronExpression.Parse(taskAttribute.Schedule);
-                                TimeZoneInfo timeZoneInfo = taskAttribute.TimeZone != null
-                                    ? TimeZoneInfo.FindSystemTimeZoneById(taskAttribute.TimeZone)
-                                    : TimeZoneInfo.Utc;
-
-                                schedule = new CronSchedule(cronExpression, timeZoneInfo, taskAttribute.FastForward);
-                            }
-                            else
-                            {
-                                schedule = new IntervalSchedule(
-                                    new TimeSpan(taskAttribute.Days, taskAttribute.Hours, taskAttribute.Minutes, taskAttribute.Seconds),
-                                    taskAttribute.FastForward
-                                );
-                            }
-                            var taskName = taskAttribute.Name ?? methodInfo.Name;
-                            var leaseDuration = TimeSpan.FromMinutes(1);
-                            var data = new Dictionary<string, object?>();
-                            var taskConfiguration = new TaskConfiguration(
-                                schedule,
-                                taskAttribute.FailureMode,
-                                taskAttribute.ExecutionMode,
-                                leaseDuration,
-                                data
-                            );
-                            _staticTaskBuilders.Add(new TaskContainerTaskBuilder(taskContainerType, methodInfo, taskName, taskConfiguration));
-                            break;
-                        }
-                    case CsissorsDynamicTaskAttribute dynamicTaskAttribute:
-                        {
-                            var taskName = dynamicTaskAttribute.Name ?? methodInfo.Name;
-                            _dynamicTaskBuilders.Add(new TaskContainerTaskBuilder(taskContainerType, methodInfo, taskName));
-                            break;
-                        }
+                    case CsissorsTaskAttribute _:
+                        _staticTaskBuilders.Add(new TaskContainerTaskBuilder(taskContainerType, methodInfo, attribute));
+                        break;
+                    case CsissorsDynamicTaskAttribute _:
+                        _dynamicTaskBuilders.Add(new TaskContainerTaskBuilder(taskContainerType, methodInfo, attribute));
+                        break;
                 }
             }
         }
-
     }
 
 }

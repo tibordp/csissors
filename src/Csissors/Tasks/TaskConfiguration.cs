@@ -6,6 +6,10 @@ namespace Csissors.Tasks
 {
     public class TaskConfiguration
     {
+        public static readonly TaskConfiguration Default = new TaskConfiguration(
+            new NullSchedule(), FailureMode.None, ExecutionMode.AtLeastOnce, TimeSpan.FromSeconds(60), new Dictionary<string, object?>()
+        );
+
         public ISchedule Schedule { get; }
         public FailureMode FailureMode { get; }
         public ExecutionMode ExecutionMode { get; }
@@ -19,5 +23,10 @@ namespace Csissors.Tasks
             ExecutionMode = executionMode;
             LeaseDuration = leaseDuration;
         }
+
+        public TaskConfiguration WithSchedule(ISchedule schedule) => new TaskConfiguration(schedule, FailureMode, ExecutionMode, LeaseDuration, Data);
+        public TaskConfiguration WithExecutionMode(ExecutionMode executionMode) => new TaskConfiguration(Schedule, FailureMode, executionMode, LeaseDuration, Data);
+        public TaskConfiguration WithFailureModeM(FailureMode failureMode) => new TaskConfiguration(Schedule, failureMode, ExecutionMode, LeaseDuration, Data);
+        public TaskConfiguration WithData(IReadOnlyDictionary<string, object?> data) => new TaskConfiguration(Schedule, FailureMode, ExecutionMode, LeaseDuration, data);
     }
 }

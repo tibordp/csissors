@@ -1,4 +1,5 @@
 using Csissors.Tasks;
+using Csissors.Utilities;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -37,16 +38,18 @@ namespace Csissors.Repository
         }
 
         private readonly ILogger<InMemoryRepository> _log;
+        private readonly IClock _clock;
         private readonly object _syncRoot = new object();
         private readonly Dictionary<ITask, TaskData> _data = new Dictionary<ITask, TaskData>();
         private readonly Dictionary<IDynamicTask, HashSet<ITask>> _dynamicTasks = new Dictionary<IDynamicTask, HashSet<ITask>>();
 
-        public InMemoryRepository(ILogger<InMemoryRepository> log)
+        public InMemoryRepository(ILogger<InMemoryRepository> log, IClock clock)
         {
             _log = log ?? throw new ArgumentNullException(nameof(log));
+            _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         }
 
-        public IAsyncEnumerable<(ITask, ILease)> PollDynamicTaskAsync(DateTimeOffset now, IDynamicTask task, CancellationToken cancellationToken)
+        public IAsyncEnumerable<(ITask, ILease)> PollDynamicTaskAsync(IDynamicTask task, CancellationToken cancellationToken)
         {
             var result = Array.Empty<(ITask, ILease)>();
             lock (_syncRoot)
@@ -59,8 +62,9 @@ namespace Csissors.Repository
             return result.ToAsyncEnumerable();
         }
 
-        public Task<PollResponse> PollTaskAsync(DateTimeOffset now, ITask task, ILease? lease, CancellationToken cancellationToken)
+        public Task<PollResponse> PollTaskAsync(ITask task, ILease? lease, CancellationToken cancellationToken)
         {
+            DateTimeOffset now = _clock.UtcNow;
             lock (_syncRoot)
             {
                 if (!_data.TryGetValue(task, out var taskData))
@@ -111,8 +115,10 @@ namespace Csissors.Repository
             }
         }
 
-        public Task CommitTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
+        public Task CommitTaskAsync(ITask task, ILease lease, CancellationToken cancellationToken)
         {
+            DateTimeOffset now = _clock.UtcNow;
+            
             lock (_syncRoot)
             {
                 if (_data.TryGetValue(task, out var taskData) && taskData.LockedBy == lease)
@@ -126,7 +132,7 @@ namespace Csissors.Repository
             }
         }
 
-        public Task UnlockTaskAsync(DateTimeOffset now, ITask task, ILease lease, CancellationToken cancellationToken)
+        public Task UnlockTaskAsync(ITask task, ILease lease, CancellationToken cancellationToken)
         {
             lock (_syncRoot)
             {
@@ -140,7 +146,7 @@ namespace Csissors.Repository
             }
         }
 
-        public Task RegisterTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
+        public Task RegisterTaskAsync(ITask task, CancellationToken cancellationToken)
         {
             if (task.ParentTask != null)
             {
@@ -157,7 +163,7 @@ namespace Csissors.Repository
             return Task.CompletedTask;
         }
 
-        public Task UnregistrerTaskAsync(DateTimeOffset now, ITask task, CancellationToken cancellationToken)
+        public Task UnregistrerTaskAsync(ITask task, CancellationToken cancellationToken)
         {
             if (task.ParentTask != null)
             {
@@ -176,7 +182,7 @@ namespace Csissors.Repository
             return Task.CompletedTask;
         }
 
-        public Task<IRepository> CreateRepositoryAsync()
+        public Task<IRepository> CreateRepositoryAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult<IRepository>(this);
         }
