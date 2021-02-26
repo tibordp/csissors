@@ -6,6 +6,7 @@ using Csissors.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
+using Newtonsoft.Json;
 using StackExchange.Redis;
 using System;
 using System.Collections.Generic;
@@ -67,13 +68,14 @@ namespace Csissors.Demo
             _log = log ?? throw new ArgumentNullException(nameof(log));
         }
 
-        [CsissorsTask(Seconds = 3)]
+        [CsissorsTask(Seconds = 5)]
         public static async Task LongRunningTask(ITaskContext taskContext)
         {
-            await Task.Delay(10000);
+            //await Task.Delay(10000);
+            Console.WriteLine("ahoj");
         }
 
-        [CsissorsTask(Seconds = 2)]
+        [CsissorsTask(Seconds = 3)]
         public static async Task EveryTwoSeconds(ILogger<Program> anotherLog)
         {
             anotherLog.LogInformation("MUAHAHAAHA");
@@ -92,7 +94,7 @@ namespace Csissors.Demo
                     _log.LogInformation($"Hello, I am {context.Task.Name}");
                 }
         */
-
+        
         [CsissorsDynamicTask]
         public async Task EveryMinuteDynamic(ITaskContext context, [FromTaskData] string username, [FromTaskData(Optional = true)] string nonExistent)
         {
@@ -102,6 +104,7 @@ namespace Csissors.Demo
                 await context.AppContext.UnscheduleTask(context.Task.ParentTask, context.Task.Name, CancellationToken.None);
             }
         }
+        
     }
 
     class Program
@@ -126,34 +129,33 @@ namespace Csissors.Demo
                     }));
                 })
                 //.AddTaskContainer<TaskContainer>()
-                .AddAssembly()
+                //.AddAssembly()
                 .AddDynamicTask("yupee", async (ITaskContext context, ILoggerFactory logger) =>
                 {
-                    logger.CreateLogger("yuhuhu").LogInformation("Hello", context.Task.Configuration.Data);
+                    logger.CreateLogger("yuhuhu").LogInformation($"Hello {JsonConvert.SerializeObject(context.Task.Configuration.Data)}");
                     await Task.Yield();
                 })
-                .AddTask("whipee", conf, async (ITaskContext context, ILoggerFactory logger) =>
-                {
-                    logger.CreateLogger("yuhuhu").LogInformation("Hello1", context.Task.Configuration.Data);
-                    await Task.Yield();
-                })
+                //.AddTask("whipee", conf, async (ITaskContext context, ILoggerFactory logger) =>
+                //{
+                //    logger.CreateLogger("yuhuhu").LogInformation("Hello1", context.Task.Configuration.Data);
+                //    await Task.Yield();
+                //})
                 //.AddMiddleware<RetryMiddleware>()
                 .AddPostgresRepository(options =>
                 {
                     options.ConnectionString = "Host=localhost;Username=postgres;Password=postgres;Database=postgres";
+                    options.TableName = "pyncette" + Guid.NewGuid().ToString("N");
                 })
                 /*.AddRedisRepository(options =>
                 {
                     options.ConfigurationOptions = ConfigurationOptions.Parse("localhost");
                 })*/
                 ;
-
-            await using (var context = await csissors.BuildAsync())
+            var cts = new CancellationTokenSource();
+            cts.CancelAfter(50000);
+            await using (var context = await csissors.BuildAsync(cts.Token))
             {
-                var cts = new CancellationTokenSource();
-                cts.CancelAfter(5000);
                 var task = context.Tasks.DynamicTasks[0];
-
                 await context.ScheduleTask(task, "hello1", new TaskConfiguration(
                         new IntervalSchedule(TimeSpan.FromSeconds(2), false),
                         FailureMode.None,
@@ -163,6 +165,13 @@ namespace Csissors.Demo
                 ), cts.Token);
                 await context.ScheduleTask(task, "hello2", new TaskConfiguration(
                         new IntervalSchedule(TimeSpan.FromSeconds(4), false),
+                        FailureMode.None,
+                        ExecutionMode.AtLeastOnce,
+                        TimeSpan.FromMinutes(1),
+                        new Dictionary<string, object?> { { "username", "liza" }, { "nonExistent", "liza" } }
+                ), cts.Token);
+                await context.ScheduleTask(task, "hello3", new TaskConfiguration(
+                        new CronSchedule(Cronos.CronExpression.Parse("* * * * *"), TimeZoneInfo.Utc, false),
                         FailureMode.None,
                         ExecutionMode.AtLeastOnce,
                         TimeSpan.FromMinutes(1),

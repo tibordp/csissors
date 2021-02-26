@@ -2,11 +2,14 @@ using Csissors.Attributes;
 using Csissors.Executor;
 using Csissors.Parameters;
 using Csissors.Repository;
+using Csissors.Serialization;
 using Csissors.Tasks;
+using Csissors.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Csissors
@@ -29,7 +32,9 @@ namespace Csissors
                     .AddSingleton<IParameterMapper, ContextAttributeMapper>()
                     .AddSingleton<IParameterMapper, CancellationTokenAttributeMapper>()
                     .AddSingleton<IParameterMapper, ServiceAttributeMapper>()
-                    .AddSingleton<IParameterMapper, TaskDataParameterMapper>();
+                    .AddSingleton<IParameterMapper, TaskDataParameterMapper>()
+                    .AddSingleton<ITaskInstanceFactory, DefaultTaskInstanceFactory>()
+                    .AddSingleton<IClock, Clock>();
             }
         }
 
@@ -72,12 +77,12 @@ namespace Csissors
             return this;
         }
 
-        public async Task<IAppContext> BuildAsync()
+        public async Task<IAppContext> BuildAsync(CancellationToken cancellationToken)
         {
             var serviceProvider = Services.BuildServiceProvider();
             var taskSet = TaskSet.BuildTasks(serviceProvider, _staticTaskBuilders, _dynamicTaskBuilders);
             var repositoryFactory = serviceProvider.GetRequiredService<IRepositoryFactory>();
-            var repository = await repositoryFactory.CreateRepositoryAsync();
+            var repository = await repositoryFactory.CreateRepositoryAsync(cancellationToken);
 
             return ActivatorUtilities.CreateInstance<CsissorsContext>(serviceProvider, taskSet, repository);
         }

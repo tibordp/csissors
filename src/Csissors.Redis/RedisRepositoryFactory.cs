@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using StackExchange.Redis;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Csissors.Redis
@@ -21,7 +22,7 @@ namespace Csissors.Redis
             _options = options.Value;
         }
 
-        public async Task<IRepository> CreateRepositoryAsync()
+        public async Task<IRepository> CreateRepositoryAsync(CancellationToken cancellationToken)
         {
             _log.LogInformation("Connecting to Redis");
             IConnectionMultiplexer redis = await ConnectionMultiplexer.ConnectAsync(_options.ConfigurationOptions);

@@ -25,6 +25,8 @@ namespace Csissors.Tasks
         }
 
         public TaskConfiguration WithSchedule(ISchedule schedule) => new TaskConfiguration(schedule, FailureMode, ExecutionMode, LeaseDuration, Data);
+        public TaskConfiguration WithExecutionMode(ExecutionMode executionMode) => new TaskConfiguration(Schedule, FailureMode, executionMode, LeaseDuration, Data);
+        public TaskConfiguration WithFailureModeM(FailureMode failureMode) => new TaskConfiguration(Schedule, failureMode, ExecutionMode, LeaseDuration, Data);
         public TaskConfiguration WithData(IReadOnlyDictionary<string, object?> data) => new TaskConfiguration(Schedule, FailureMode, ExecutionMode, LeaseDuration, data);
     }
 }

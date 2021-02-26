@@ -1,5 +1,6 @@
 using Csissors.Executor;
 using Csissors.Repository;
+using Csissors.Serialization;
 using Csissors.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,16 +18,18 @@ namespace Csissors
         private readonly ILogger<CsissorsContext> _log;
         private readonly IExecutor _executor;
         private readonly IRepository _repository;
+        private readonly ITaskInstanceFactory _taskInstanceFactory;
         private readonly CsissorsOptions _configuration;
 
         public TaskSet Tasks { get; }
 
-        public CsissorsContext(ILogger<CsissorsContext> log, IExecutor executor, IRepository repository, TaskSet taskSet, IOptions<CsissorsOptions> options)
+        public CsissorsContext(ILogger<CsissorsContext> log, IExecutor executor, IRepository repository, ITaskInstanceFactory taskInstanceFactory, TaskSet taskSet, IOptions<CsissorsOptions> options)
         {
             Tasks = taskSet ?? throw new ArgumentNullException(nameof(taskSet));
             _log = log ?? throw new ArgumentNullException(nameof(log));
             _executor = executor ?? throw new ArgumentNullException(nameof(executor));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+            _taskInstanceFactory = taskInstanceFactory ?? throw new ArgumentNullException(nameof(taskInstanceFactory));
             _configuration = options.Value;
         }
 
@@ -51,19 +54,17 @@ namespace Csissors
 
             try
             {
-
-                var now = DateTimeOffset.UtcNow;
                 if (task.Configuration.ExecutionMode == ExecutionMode.AtMostOnce)
                 {
                     return;
                 }
                 else if (executionSucceeded || task.Configuration.FailureMode == FailureMode.Commit)
                 {
-                    await _repository.CommitTaskAsync(now, task, pollResponse.Lease, CancellationToken.None);
+                    await _repository.CommitTaskAsync(task, pollResponse.Lease, CancellationToken.None);
                 }
                 else if (task.Configuration.FailureMode == FailureMode.Unlock)
                 {
-                    await _repository.UnlockTaskAsync(now, task, pollResponse.Lease, CancellationToken.None);
+                    await _repository.UnlockTaskAsync(task, pollResponse.Lease, CancellationToken.None);
                 }
             }
             catch (Exception e)
@@ -72,7 +73,7 @@ namespace Csissors
             }
         }
 
-        private async IAsyncEnumerable<(ITask, ILease?)> GetActiveTasksAsync(DateTimeOffset now, CancellationToken cancellationToken)
+        private async IAsyncEnumerable<(ITask, ILease?)> GetActiveTasksAsync(CancellationToken cancellationToken)
         {
             foreach (var task in Tasks.StaticTasks)
             {
@@ -81,7 +82,7 @@ namespace Csissors
 
             foreach (var task in Tasks.DynamicTasks)
             {
-                await foreach (var taskAndLease in _repository.PollDynamicTaskAsync(now, task, cancellationToken).ConfigureAwait(false))
+                await foreach (var taskAndLease in _repository.PollDynamicTaskAsync(task, cancellationToken).ConfigureAwait(false))
                 {
                     yield return taskAndLease;
                 }
@@ -90,19 +91,20 @@ namespace Csissors
 
         private async Task TickAsync(CancellationToken cancellationToken)
         {
-            var now = DateTimeOffset.UtcNow;
-
-            await foreach (var (task, lease) in GetActiveTasksAsync(now, cancellationToken).ConfigureAwait(false))
+            Console.WriteLine("Poll!");
+            await foreach (var (task, lease) in GetActiveTasksAsync(cancellationToken).ConfigureAwait(false))
             {
-                var pollResponse = await _repository.PollTaskAsync(now, task, lease, cancellationToken).ConfigureAwait(false);
+                var pollResponse = await _repository.PollTaskAsync(task, lease, cancellationToken).ConfigureAwait(false);
                 switch (pollResponse.Result)
                 {
-                    case ResultType.Pending:
-                        break;
                     case ResultType.Ready:
                         await _executor.SpawnTaskAsync(() => ExecuteTaskAsync(task, pollResponse, cancellationToken), cancellationToken).ConfigureAwait(false);
                         break;
+                    case ResultType.Pending:
+                        break;                        
                     case ResultType.Locked:
+                        break;
+                    case ResultType.Missing:
                         break;
                     default:
                         throw new ArgumentOutOfRangeException(nameof(pollResponse.Result));
@@ -114,23 +116,28 @@ namespace Csissors
         {
             while (true)
             {
-                await TickAsync(cancellationToken).ConfigureAwait(false);
+                try {
+                    await TickAsync(cancellationToken).ConfigureAwait(false);
+                } catch (OperationCanceledException) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                } catch (Exception e) {
+                    _log.LogWarning(e, "Polling failed");
+                }
+
                 await Task.Delay(_configuration.PollInterval, cancellationToken).ConfigureAwait(false);
             }
         }
 
         public async Task ScheduleTask(IDynamicTask baseTask, string taskInstanceName, TaskConfiguration taskConfiguration, CancellationToken cancellationToken)
         {
-            var now = DateTimeOffset.UtcNow;
-            var dynamicTaskInstance = new DynamicTaskInstance(baseTask, taskInstanceName, taskConfiguration);
-            await _repository.RegisterTaskAsync(now, dynamicTaskInstance, cancellationToken).ConfigureAwait(false);
+            var dynamicTaskInstance = _taskInstanceFactory.CreateTaskInstance(baseTask, taskInstanceName, taskConfiguration);
+            await _repository.RegisterTaskAsync(dynamicTaskInstance, cancellationToken).ConfigureAwait(false);
         }
 
         public async Task UnscheduleTask(IDynamicTask baseTask, string taskInstanceName, CancellationToken cancellationToken)
         {
-            var now = DateTimeOffset.UtcNow;
-            var dynamicTaskInstance = new DynamicTaskInstance(baseTask, taskInstanceName);
-            await _repository.UnregistrerTaskAsync(now, dynamicTaskInstance, cancellationToken).ConfigureAwait(false);
+            var dynamicTaskInstance = _taskInstanceFactory.CreateTaskInstance(baseTask, taskInstanceName, TaskConfiguration.Default);
+            await _repository.UnregistrerTaskAsync(dynamicTaskInstance, cancellationToken).ConfigureAwait(false);
         }
 
         public async ValueTask DisposeAsync()

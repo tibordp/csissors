@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\Csissors\Csissors.csproj" />
-    <ProjectReference Include="..\Csissors.Redis\Csissors.Redis.csproj" />
-    <ProjectReference Include="..\Csissors.Postgres\Csissors.Postgres.csproj" />
+    <ProjectReference Include="..\..\src\Csissors\Csissors.csproj" />
+    <ProjectReference Include="..\..\src\Csissors.Redis\Csissors.Redis.csproj" />
+    <ProjectReference Include="..\..\src\Csissors.Postgres\Csissors.Postgres.csproj" />
   </ItemGroup>
 
   <ItemGroup>

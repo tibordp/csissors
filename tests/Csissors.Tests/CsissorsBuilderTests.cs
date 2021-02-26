@@ -9,6 +9,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -19,7 +20,7 @@ namespace Csisors.Tests
         public static CsissorsBuilder AddMockRepository(this CsissorsBuilder builder)
         {
             var repositoryFactory = new Mock<IRepositoryFactory>();
-            repositoryFactory.Setup(x => x.CreateRepositoryAsync())
+            repositoryFactory.Setup(x => x.CreateRepositoryAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(Mock.Of<IRepository>());
 
             return builder.ConfigureServices(services => services.AddSingleton(repositoryFactory.Object));
@@ -52,7 +53,7 @@ namespace Csisors.Tests
                 .AddTaskContainer<MockContainer>();
 
             // act
-            var context = await sut.BuildAsync();
+            var context = await sut.BuildAsync(CancellationToken.None);
 
             // assert
             context.Tasks.DynamicTasks.Should().HaveCount(1);
@@ -76,7 +77,7 @@ namespace Csisors.Tests
             );
 
             // act
-            var context = await sut.BuildAsync();
+            var context = await sut.BuildAsync(CancellationToken.None);
 
             // assert
             context.Tasks.StaticTasks.Should().HaveCount(1);
@@ -96,7 +97,7 @@ namespace Csisors.Tests
                 .AddDynamicTask("mock", async () => throw new IOException());
 
             // act
-            var context = await sut.BuildAsync();
+            var context = await sut.BuildAsync(CancellationToken.None);
 
             // assert
             context.Tasks.DynamicTasks.Should().HaveCount(1);
@@ -122,7 +123,7 @@ namespace Csisors.Tests
                 .AddTask("mock", expectedConfiguration, async () => throw new IOException());
 
             // act
-            var context = await sut.BuildAsync();
+            var context = await sut.BuildAsync(CancellationToken.None);
 
             // assert
             context.Tasks.StaticTasks.Should().HaveCount(1);
